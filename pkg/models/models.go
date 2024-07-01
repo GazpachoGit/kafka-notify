@@ -1,12 +1,11 @@
 package models
 
-type User struct{
-	ID int `json:"id"`
+type User struct {
+	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
 
-type Notification struct{
-	From User `json:"from"`
-	To User `json:"to"`
-	Message string `json:"message"` 
+type Notification struct {
+	To      int    `json:"to"`
+	Message string `json:"message"`
 }

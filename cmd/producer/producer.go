@@ -1,13 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"kafka-notify/pkg/models"
 	"log"
-	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/IBM/sarama"
 	"github.com/gin-gonic/gin"
@@ -39,23 +41,10 @@ func getUserIDFromRequest(formValue string, ctx *gin.Context) (int, error) {
 	return id, nil
 }
 
-func sendKafkaMessage(producer sarama.SyncProducer, users []models.User, ctx *gin.Context, fromID, toID int) error {
-	message := ctx.PostForm("message")
-
-	fromUser, err := findUserByID(fromID, users)
+func sendKafkaMessage(producer sarama.SyncProducer, users []models.User, notification *models.Notification) error {
+	toUser, err := findUserByID(notification.To, users)
 	if err != nil {
 		return err
-	}
-
-	toUser, err := findUserByID(toID, users)
-	if err != nil {
-		return err
-	}
-
-	notification := models.Notification{
-		From:    fromUser,
-		To:      toUser,
-		Message: message,
 	}
 	notificationJSON, err := json.Marshal(notification)
 	if err != nil {
@@ -71,36 +60,17 @@ func sendKafkaMessage(producer sarama.SyncProducer, users []models.User, ctx *gi
 	return err
 }
 
-func sendMessageHandler(producer sarama.SyncProducer, users []models.User) gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		fromID, err := getUserIDFromRequest("fromID", ctx)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-			return
-		}
-
-		toID, err := getUserIDFromRequest("toID", ctx)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-			return
-		}
-
-		err = sendKafkaMessage(producer, users, ctx, fromID, toID)
-		if errors.Is(err, ErrUserNotFoundInProducer) {
-			ctx.JSON(http.StatusNotFound, gin.H{"message": "User not found"})
-			return
-		}
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"message": err.Error(),
-			})
-			return
-		}
-
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "Notification sent successfully!",
-		})
+func sendMessageHandler2(producer sarama.SyncProducer, message string, users []models.User) error {
+	var notification = &models.Notification{}
+	err := json.Unmarshal([]byte(message), notification)
+	if err != nil {
+		return err
 	}
+	err = sendKafkaMessage(producer, users, notification)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func setupProducer() (sarama.SyncProducer, error) {
@@ -127,13 +97,22 @@ func main() {
 		log.Fatalf("failed to initialize producer: %v", err)
 	}
 	defer producer.Close()
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
-	router.POST("/send", sendMessageHandler(producer, users))
 
-	fmt.Printf("Kafka PRODUCER 📨 started at http://localhost%s\n", ProducerPort)
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Producer")
+	fmt.Println("---------------------")
 
-	if err := router.Run(ProducerPort); err != nil {
-		log.Printf("failed to run the server: %v", err)
+	for {
+		fmt.Print("Enter JSON notification -> ")
+		text, _ := reader.ReadString('\n')
+		// convert CRLF to LF
+		message := strings.Replace(text, "\n", "", -1)
+
+		err := sendMessageHandler2(producer, message, users)
+		if err != nil {
+			fmt.Println("Error: ", err)
+		} else {
+			fmt.Println("message is sent")
+		}
 	}
 }

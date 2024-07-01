@@ -1,17 +1,19 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"kafka-notify/cmd/consumer/signal"
+	"kafka-notify/cmd/consumer/storage"
 	"kafka-notify/pkg/models"
 	"log"
-	"net/http"
-	"sync"
+	"os"
+	"strings"
 
 	"github.com/IBM/sarama"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -23,35 +25,16 @@ const (
 
 var ErrNoMessagesFound = errors.New("no messages found")
 
-func getUserIDFromRequest(ctx *gin.Context) (string, error) {
-	userID := ctx.Param("userID")
-	if userID == "" {
-		return "", ErrNoMessagesFound
-	}
-	return userID, nil
-}
-
-type UserNotifications map[string][]models.Notification
-
-type NotificationStore struct {
-	data UserNotifications
-	mu   sync.RWMutex
-}
-
-func (ns *NotificationStore) Add(userID string, notification models.Notification) {
-	ns.mu.Lock()
-	defer ns.mu.Unlock()
-	ns.data[userID] = append(ns.data[userID], notification)
-}
-
-func (ns *NotificationStore) Get(userID string) []models.Notification {
-	ns.mu.RLock()
-	defer ns.mu.RUnlock()
-	return ns.data[userID]
-}
-
 type Consumer struct {
-	store *NotificationStore
+	storage *storage.Storage
+	signal  *signal.Signal
+}
+
+func NewConsumer(storage *storage.Storage, signal *signal.Signal) *Consumer {
+	return &Consumer{
+		storage,
+		signal,
+	}
 }
 
 func (*Consumer) Setup(sarama.ConsumerGroupSession) error   { return nil }
@@ -66,7 +49,11 @@ func (consumer *Consumer) ConsumeClaim(sess sarama.ConsumerGroupSession, claim s
 			log.Printf("failed to unmarshal notification: %v", err)
 			continue
 		}
-		consumer.store.Add(userID, notification)
+		consumer.storage.Push(userID, notification)
+		err = consumer.signal.Publish(userID)
+		if err != nil {
+			fmt.Println(err)
+		}
 		sess.MarkMessage(msg, "")
 	}
 	return nil
@@ -83,16 +70,14 @@ func initializeConsumerGroup() (sarama.ConsumerGroup, error) {
 	return consumerGroup, nil
 }
 
-func setupConsumerGroup(ctx context.Context, store *NotificationStore) {
+func setupConsumerGroup(ctx context.Context, storage *storage.Storage, signal *signal.Signal) {
 	consumerGroup, err := initializeConsumerGroup()
 	if err != nil {
 		log.Printf("initialization error: %v", err)
 	}
 	defer consumerGroup.Close()
 
-	consumer := &Consumer{
-		store: store,
-	}
+	consumer := NewConsumer(storage, signal)
 
 	for {
 		err := consumerGroup.Consume(ctx, []string{ConsumerTopic}, consumer)
@@ -105,43 +90,66 @@ func setupConsumerGroup(ctx context.Context, store *NotificationStore) {
 	}
 }
 
-func handleNotifications(store *NotificationStore) gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		userID, err := getUserIDFromRequest(ctx)
+func startDefaultListener(storage *storage.Storage, signal *signal.Signal) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Consumer")
+	fmt.Println("---------------------")
+	for {
+		fmt.Print("Input userID -> ")
+		text, _ := reader.ReadString('\n')
+		userID := strings.Replace(text, "\n", "", -1)
+		userID = strings.Replace(userID, "\r", "", -1)
+		if len(userID) == 0 {
+			fmt.Println("Invalid userID")
+			continue
+		}
+
+		msgs, unsubscribe, err := signal.Subscribe(userID)
 		if err != nil {
-			ctx.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
-			return
+			fmt.Println("Error: ", err)
+			continue
 		}
-		notes := store.Get(userID)
-		if len(notes) == 0 {
-			ctx.JSON(http.StatusOK,
-				gin.H{
-					"message":       "No notifications found for user",
-					"notifications": []models.Notification{},
-				})
-			return
+		stopChanel := make(chan struct{})
+		go stopHandler(stopChanel)
+	L:
+		for {
+			select {
+			case <-msgs:
+				message, _ := storage.Pop(userID)
+				fmt.Println("New message: ", message.Message)
+			case <-stopChanel:
+				unsubscribe()
+				break L
+			}
 		}
-		ctx.JSON(http.StatusOK, gin.H{"notifications": notes})
+	}
+}
+
+func stopHandler(ch chan struct{}) {
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fmt.Println("Stop listen")
+		ch <- struct{}{}
+		break
 	}
 }
 
 func main() {
-	store := &NotificationStore{
-		data: make(UserNotifications),
-	}
+	storage := storage.NewStorage(50)
+	signal := signal.NewSignal()
 	ctx, cancel := context.WithCancel(context.Background())
-	go setupConsumerGroup(ctx, store)
 	defer cancel()
+	go setupConsumerGroup(ctx, storage, signal)
+	startDefaultListener(storage, signal)
 
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
-
-	router.GET("notifications/:userID", handleNotifications(store))
-
-	fmt.Printf("Kafka CONSUMER (Group: %s) 👥📥 "+"started at http://localhost%s\n", ConsumerGroup, ConsumerPort)
-
-	if err := router.Run(ConsumerPort); err != nil {
-		log.Printf("failed to run the server: %v", err)
-	}
-
+	// time.Sleep(5 * time.Second)
+	// msgs, _, err := signal.Subscribe("1")
+	// if err != nil {
+	// 	fmt.Println("Error: ", err)
+	// 	return
+	// }
+	// for range msgs {
+	// 	message, _ := storage.Pop("1")
+	// 	fmt.Println("New message: ", message.Message)
+	// }
 }
