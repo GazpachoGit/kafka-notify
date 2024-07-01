@@ -39,3 +39,16 @@ func (s *Storage) Pop(clientID string) (models.Notification, error) {
 		return models.Notification{}, ErrEmpty
 	}
 }
+
+func (s *Storage) PopAll(clientID string) ([]models.Notification, error) {
+	c := s.get(clientID)
+	length := len(c)
+	if length > 0 {
+		out := make([]models.Notification, 0, length)
+		for i := 0; i < length; i++ {
+			out = append(out, <-c)
+		}
+		return out, nil
+	}
+	return nil, ErrEmpty
+}

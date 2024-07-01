@@ -111,8 +111,6 @@ func main() {
 		err := sendMessageHandler2(producer, message, users)
 		if err != nil {
 			fmt.Println("Error: ", err)
-		} else {
-			fmt.Println("message is sent")
 		}
 	}
 }
