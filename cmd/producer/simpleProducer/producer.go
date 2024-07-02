@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/IBM/sarama"
-	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -30,15 +29,6 @@ func findUserByID(id int, users []models.User) (models.User, error) {
 		}
 	}
 	return models.User{}, ErrUserNotFoundInProducer
-}
-
-// there is urlencoded form in the request body which contains the formValue key. Here we getting the value of this key
-func getUserIDFromRequest(formValue string, ctx *gin.Context) (int, error) {
-	id, err := strconv.Atoi(ctx.PostForm(formValue))
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse ID from the form value %s: %w", formValue, err)
-	}
-	return id, nil
 }
 
 func sendKafkaMessage(producer sarama.SyncProducer, users []models.User, notification *models.Notification) error {
