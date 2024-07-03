@@ -73,7 +73,6 @@ func SetupProducer() (ProducerWithRetry, error) {
 }
 
 func main() {
-
 	producer, err := SetupProducer()
 	if err != nil {
 		log.Fatalf("failed to initialize producer: %v", err)
@@ -87,7 +86,6 @@ func main() {
 	for {
 		fmt.Print("Enter JSON notification -> ")
 		text, _ := reader.ReadString('\n')
-		// convert CRLF to LF
 		message := strings.Replace(text, "\n", "", -1)
 
 		producer.sendMessage(message)

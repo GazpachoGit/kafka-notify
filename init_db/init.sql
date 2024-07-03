@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS notifications (user_id integer, message TEXT);
