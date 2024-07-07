@@ -81,6 +81,7 @@ func main() {
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Producer")
+	fmt.Println("Message example: {\"to\":1, \"message\":\"blablabla\"}")
 	fmt.Println("---------------------")
 
 	for {
