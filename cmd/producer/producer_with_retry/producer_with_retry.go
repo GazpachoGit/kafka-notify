@@ -18,6 +18,7 @@ const (
 	ProducerPort       = ":8080"
 	KafkaServerAddress = "localhost:9092"
 	KafkaTopic         = "notifications"
+	maxRetries         = 3
 )
 
 var ErrUserNotFoundInProducer = errors.New("user not found")
@@ -28,7 +29,7 @@ type ProducerWithRetry struct {
 	deadLetterQueue []string
 }
 
-func (p *ProducerWithRetry) sendMessage(message string) {
+func (p *ProducerWithRetry) SendMessageHandler(message string) {
 	var notification = &models.Notification{}
 	err := json.Unmarshal([]byte(message), notification)
 	if err != nil {
@@ -66,7 +67,7 @@ func SetupProducer() (ProducerWithRetry, error) {
 	}
 	producerWithRetry := ProducerWithRetry{
 		producer:        coreProducer,
-		maxRetries:      3,
+		maxRetries:      maxRetries,
 		deadLetterQueue: make([]string, 0, 10),
 	}
 	return producerWithRetry, nil
@@ -89,6 +90,6 @@ func main() {
 		text, _ := reader.ReadString('\n')
 		message := strings.Replace(text, "\n", "", -1)
 
-		producer.sendMessage(message)
+		producer.SendMessageHandler(message)
 	}
 }
