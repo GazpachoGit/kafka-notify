@@ -1,1 +1,4 @@
-CREATE TABLE IF NOT EXISTS notifications (user_id integer, message TEXT);
+CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id integer,
+    message TEXT);

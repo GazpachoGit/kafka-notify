@@ -21,6 +21,7 @@ const (
 	ConsumerTopic      = "notifications"
 	ConsumerPort       = ":8081"
 	KafkaServerAddress = "localhost:9092"
+	dbConnStr          = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
 )
 
 var ErrNoMessagesFound = errors.New("no messages found")
@@ -142,7 +143,12 @@ func stopHandler(ch chan struct{}) {
 }
 
 func main() {
-	storage := storage.NewStorage(50)
+	storage, err := storage.NewStorage(50, 3, dbConnStr)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer storage.Close()
 	signal := signal.NewSignal()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

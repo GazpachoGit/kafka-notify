@@ -1,7 +1,9 @@
 package storage
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"kafka-notify/pkg/models"
 	"sync"
 )
@@ -9,12 +11,37 @@ import (
 var ErrEmpty = errors.New("no messages found")
 
 type Storage struct {
-	data *sync.Map
-	size int
+	data      *sync.Map
+	size      int
+	dbChanel  chan models.Notification
+	dbStorage *PgDB
 }
 
-func NewStorage(s int) *Storage {
-	return &Storage{new(sync.Map), s}
+func NewStorage(s int, dbQueueSize int, dbConnStr string) (*Storage, error) {
+	dbStorage, err := InitDB(context.Background(), dbConnStr)
+	if err != nil {
+		return nil, err
+	}
+	dbChanel := make(chan models.Notification, dbQueueSize)
+	go func() {
+		buff := make([]models.Notification, 0, dbQueueSize)
+		for v := range dbChanel {
+			buff = append(buff, v)
+			if len(buff) == dbQueueSize {
+				err := dbStorage.InsertMessages(buff)
+				if err != nil {
+					fmt.Println(err)
+				}
+				buff = buff[:0]
+			}
+		}
+	}()
+	return &Storage{
+		data:      new(sync.Map),
+		size:      s,
+		dbChanel:  dbChanel,
+		dbStorage: dbStorage,
+	}, nil
 }
 
 func (s *Storage) get(clientID string) chan models.Notification {
@@ -28,6 +55,7 @@ func (s *Storage) Push(clientID string, message models.Notification) {
 		<-c
 	}
 	c <- message
+	s.dbChanel <- message
 }
 
 func (s *Storage) Pop(clientID string) (models.Notification, error) {
@@ -51,4 +79,9 @@ func (s *Storage) PopAll(clientID string) ([]models.Notification, error) {
 		return out, nil
 	}
 	return nil, ErrEmpty
+}
+
+func (s *Storage) Close() {
+	s.dbStorage.Close()
+	close(s.dbChanel)
 }
