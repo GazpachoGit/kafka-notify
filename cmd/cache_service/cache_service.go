@@ -13,12 +13,13 @@ import (
 )
 
 const (
-	dbConnStr = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
+	Port      = ":8080"
+	DBConnStr = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
 )
 
 func handleGetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		messageIDStr := ctx.Param("UserID")
+		messageIDStr := ctx.Param("userID")
 		messageID, err := strconv.Atoi(messageIDStr)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"message": "incorrect notification id format"})
@@ -40,7 +41,9 @@ func handleGetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.Ha
 				ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 				return
 			}
-			cache.SetCache(messageIDStr, v)
+			err = cache.SetCache(messageIDStr, v)
+		} else {
+			ctx.Header("Cache-Status", "HIT")
 		}
 		//found in cache
 		ctx.JSON(http.StatusOK, gin.H{"notifications": v})
@@ -60,7 +63,7 @@ func handleSetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.Ha
 			return
 		}
 		id := ids[0]
-		cache.SetCache(string(id), &newNote)
+		err = cache.SetCache(strconv.Itoa(id), &newNote)
 		ctx.JSON(http.StatusOK, gin.H{"id": id})
 	}
 }
@@ -72,7 +75,7 @@ func main() {
 		return
 	}
 	defer cache.Close()
-	dbStorage, err := storage.InitDB(context.Background(), dbConnStr)
+	dbStorage, err := storage.InitDB(context.Background(), DBConnStr)
 	if err != nil {
 		fmt.Println("DB connection fail: ", err)
 		return
@@ -85,9 +88,9 @@ func main() {
 	router.GET("/notifications/:userID", handleGetNotification(cache, dbStorage))
 	router.POST("/notifications", handleSetNotification(cache, dbStorage))
 
-	fmt.Printf("Cached service started")
+	fmt.Println("Cached service started")
 
-	if err := router.Run("8080"); err != nil {
+	if err := router.Run(Port); err != nil {
 		fmt.Printf("failed to run the server: %v", err)
 	}
 }

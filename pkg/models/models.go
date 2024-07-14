@@ -6,6 +6,6 @@ type User struct {
 }
 
 type Notification struct {
-	To      int    `json:"to"`
-	Message string `json:"message"`
+	To      int    `json:"to"  db:"user_id"`
+	Message string `json:"message" db:"message"`
 }

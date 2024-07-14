@@ -13,7 +13,7 @@ import (
 const (
 	RedisPassword  = "predis"
 	RedisAddress   = "localhost:6379"
-	ExpirationTime = 20 * time.Second
+	ExpirationTime = 5 * time.Minute
 )
 
 type Redis struct {

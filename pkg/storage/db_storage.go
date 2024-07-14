@@ -31,7 +31,7 @@ func (p *PgDB) Close() {
 }
 
 func (p *PgDB) InsertMessages(msgs []models.Notification) ([]int, error) {
-	insertSQL := "INSERT INTO notifications VALUES($1,$2) RETURNING id"
+	insertSQL := "INSERT INTO notifications (user_id, message) VALUES($1,$2) RETURNING id"
 	tx, err := p.dbConn.Begin(p.ctx)
 	if err != nil {
 		return nil, err
@@ -55,13 +55,13 @@ func (p *PgDB) InsertMessages(msgs []models.Notification) ([]int, error) {
 }
 
 func (p *PgDB) GetMessage(id int) (*models.Notification, error) {
-	getSQL := "SELECT * from notifications WHERE id = $1"
+	getSQL := "SELECT user_id,message from notifications WHERE id = $1 LIMIT 1"
 	note := &models.Notification{}
-	if err := p.dbConn.QueryRow(p.ctx, getSQL, id).Scan(note); err != nil {
+	if err := p.dbConn.QueryRow(p.ctx, getSQL, id).Scan(&note.To, &note.Message); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("notification %d: unknown notification", id)
 		}
-		return nil, fmt.Errorf("canPurchase %d: %v", id, err)
+		return nil, fmt.Errorf("DB error GetMessage by id %d: %v", id, err)
 	}
 	return note, nil
 }
