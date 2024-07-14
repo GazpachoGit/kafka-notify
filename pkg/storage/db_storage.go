@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"kafka-notify/pkg/models"
 
 	"github.com/jackc/pgx/v5"
@@ -47,6 +49,18 @@ func (p *PgDB) InsertMessages(msgs []models.Notification) error {
 	}
 
 	return nil
+}
+
+func (p *PgDB) GetMessage(id int) (*models.Notification, error) {
+	getSQL := "SELECT * from notifications WHERE id = $1"
+	note := &models.Notification{}
+	if err := p.dbConn.QueryRow(p.ctx, getSQL, id).Scan(note); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("notification %d: unknown notification", id)
+		}
+		return nil, fmt.Errorf("canPurchase %d: %v", id, err)
+	}
+	return note, nil
 }
 
 // func main() {
