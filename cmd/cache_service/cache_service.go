@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	middleware "kafka-notify/pkg/middleware/cache_middleware"
 	"kafka-notify/pkg/models"
 	"kafka-notify/pkg/storage"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -17,7 +18,7 @@ const (
 	DBConnStr = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
 )
 
-func handleGetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.HandlerFunc {
+func handleGetNotification(dbStorage *storage.PgDB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		messageIDStr := ctx.Param("userID")
 		messageID, err := strconv.Atoi(messageIDStr)
@@ -25,28 +26,13 @@ func handleGetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.Ha
 			ctx.JSON(http.StatusBadRequest, gin.H{"message": "incorrect notification id format"})
 			return
 		}
-		if messageIDStr == "" {
-			ctx.JSON(http.StatusNotFound, gin.H{"message": "object not found in the database"})
+		v, err := dbStorage.GetMessage(messageID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 			return
 		}
-		v, err := cache.GetCache(messageIDStr)
-		if err != nil {
-			if !errors.Is(err, storage.ErrCacheNotFound) {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-				return
-			}
-			//not found in cache
-			v, err = dbStorage.GetMessage(messageID)
-			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-				return
-			}
-			err = cache.SetCache(messageIDStr, v)
-		} else {
-			ctx.Header("Cache-Status", "HIT")
-		}
 		//found in cache
-		ctx.JSON(http.StatusOK, gin.H{"notifications": v})
+		ctx.JSON(http.StatusOK, *v)
 	}
 }
 
@@ -64,6 +50,9 @@ func handleSetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.Ha
 		}
 		id := ids[0]
 		err = cache.SetCache(strconv.Itoa(id), &newNote)
+		if err != nil {
+			log.Println("Error. fail to Set cache: ", err)
+		}
 		ctx.JSON(http.StatusOK, gin.H{"id": id})
 	}
 }
@@ -85,7 +74,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	router.GET("/notifications/:userID", handleGetNotification(cache, dbStorage))
+	router.GET("/notifications/:userID", middleware.CacheMiddlewareHandler(cache), handleGetNotification(dbStorage))
 	router.POST("/notifications", handleSetNotification(cache, dbStorage))
 
 	fmt.Println("Cached service started")
