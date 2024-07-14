@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"kafka-notify/pkg/models"
 	"kafka-notify/pkg/storage"
 	"net/http"
 	"strconv"
@@ -15,7 +16,7 @@ const (
 	dbConnStr = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
 )
 
-func handleNotifications(cache *storage.Redis, dbStorage *storage.PgDB) gin.HandlerFunc {
+func handleGetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		messageIDStr := ctx.Param("UserID")
 		messageID, err := strconv.Atoi(messageIDStr)
@@ -46,6 +47,24 @@ func handleNotifications(cache *storage.Redis, dbStorage *storage.PgDB) gin.Hand
 	}
 }
 
+func handleSetNotification(cache *storage.Redis, dbStorage *storage.PgDB) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var newNote models.Notification
+		if err := ctx.ShouldBindJSON(&newNote); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"message": "incorrect body format"})
+			return
+		}
+		ids, err := dbStorage.InsertMessages([]models.Notification{newNote})
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+			return
+		}
+		id := ids[0]
+		cache.SetCache(string(id), &newNote)
+		ctx.JSON(http.StatusOK, gin.H{"id": id})
+	}
+}
+
 func main() {
 	cache, err := storage.NewRedis()
 	if err != nil {
@@ -63,7 +82,8 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	router.GET("notifications/:userID", handleNotifications(cache, dbStorage))
+	router.GET("/notifications/:userID", handleGetNotification(cache, dbStorage))
+	router.POST("/notifications", handleSetNotification(cache, dbStorage))
 
 	fmt.Printf("Cached service started")
 

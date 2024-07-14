@@ -28,7 +28,7 @@ func NewStorage(s int, dbQueueSize int, dbConnStr string) (*Storage, error) {
 		for v := range dbChanel {
 			buff = append(buff, v)
 			if len(buff) == dbQueueSize {
-				err := dbStorage.InsertMessages(buff)
+				_, err := dbStorage.InsertMessages(buff)
 				if err != nil {
 					fmt.Println(err)
 				}

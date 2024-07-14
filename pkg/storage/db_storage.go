@@ -30,25 +30,28 @@ func (p *PgDB) Close() {
 	p.dbConn.Close(p.ctx)
 }
 
-func (p *PgDB) InsertMessages(msgs []models.Notification) error {
-	insertSQL := "INSERT INTO notifications VALUES($1,$2)"
+func (p *PgDB) InsertMessages(msgs []models.Notification) ([]int, error) {
+	insertSQL := "INSERT INTO notifications VALUES($1,$2) RETURNING id"
 	tx, err := p.dbConn.Begin(p.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	defer tx.Rollback(p.ctx)
+
+	ids := make([]int, 0, len(msgs))
 	for _, msg := range msgs {
-		if _, err := p.dbConn.Exec(p.ctx, insertSQL, msg.To, msg.Message); err != nil {
-			return err
+		var id int
+		if err := p.dbConn.QueryRow(p.ctx, insertSQL, msg.To, msg.Message).Scan(&id); err != nil {
+			return nil, err
 		}
+		ids = append(ids, id)
 	}
 
 	if err = tx.Commit(p.ctx); err != nil {
-		return err
+		return nil, err
 	}
-
-	return nil
+	//TODO: return id
+	return ids, nil
 }
 
 func (p *PgDB) GetMessage(id int) (*models.Notification, error) {
