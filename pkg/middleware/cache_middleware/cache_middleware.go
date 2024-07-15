@@ -49,6 +49,7 @@ func CacheMiddlewareHandler(cache *storage.Redis) gin.HandlerFunc {
 				err = json.Unmarshal([]byte(noteStr), note)
 				if err != nil {
 					log.Println("Error. fail to Unmarshal response to the Notification type: ", err)
+					return
 				}
 				err = cache.SetCache(messageIDStr, note)
 				if err != nil {
