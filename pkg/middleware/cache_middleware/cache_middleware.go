@@ -30,12 +30,12 @@ func CacheMiddlewareHandler(cache *storage.Redis) gin.HandlerFunc {
 			ctx.Abort()
 		}
 		v, err := cache.GetCache(messageIDStr)
-		if err != nil && !errors.Is(err, storage.ErrCacheNotFound) {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-			ctx.Abort()
-		}
-		//not found in cache
+
 		if err != nil {
+			if !errors.Is(err, storage.ErrCacheNotFound) {
+				log.Println("Error. fail to Get cache: ", err)
+			}
+			//not found in cache
 			ctx.Header("Cache-Status", "MISS")
 			blw := &bodyLogWriter{body: bytes.NewBufferString(""), ResponseWriter: ctx.Writer}
 			ctx.Writer = blw
