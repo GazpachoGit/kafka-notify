@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	Port      = ":8080"
+	Port      = ":8082"
 	DBConnStr = "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
 )
 
@@ -71,7 +71,10 @@ func main() {
 	}
 	defer dbStorage.Close()
 
-	storage.InitHotCache(cache, dbStorage)
+	err = storage.InitHotCache(cache, dbStorage)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()

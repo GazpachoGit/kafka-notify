@@ -14,7 +14,7 @@ import (
 const (
 	RedisPassword  = "predis"
 	RedisAddress   = "localhost:6379"
-	ExpirationTime = 1 * time.Minute
+	ExpirationTime = 5 * time.Minute
 )
 
 type Redis struct {
@@ -70,14 +70,11 @@ func (r *Redis) Close() {
 }
 
 func InitHotCache(cache *Redis, db *PgDB) error {
-	dbSize, err := cache.redisClient.Do("DBSIZE").Int64()
-	if err != nil {
-		return fmt.Errorf("Not able to get hot cache: %w", err)
-	}
-	if dbSize > 0 {
-		//cache already hot
-		return nil
-	}
+
+	// if dbSize > 0 {
+	// 	//cache already hot
+	// 	return nil
+	// }
 	msgs, err := db.GetAllMessages()
 	if err != nil {
 		return err
@@ -103,5 +100,11 @@ func InitHotCache(cache *Redis, db *PgDB) error {
 			return err
 		}
 	}
+	dbSize, err := cache.redisClient.Do("DBSIZE").Int64()
+	if err != nil {
+		return fmt.Errorf("Not able to get hot cache: %w", err)
+	}
+	fmt.Println("cache size: ", dbSize)
+	fmt.Println("cache is hot")
 	return nil
 }

@@ -86,7 +86,7 @@ func main() {
 	fmt.Println("---------------------")
 
 	for {
-		fmt.Print("Enter JSON notification -> ")
+		fmt.Print("Enter JSON message -> ")
 		text, _ := reader.ReadString('\n')
 		message := strings.Replace(text, "\n", "", -1)
 

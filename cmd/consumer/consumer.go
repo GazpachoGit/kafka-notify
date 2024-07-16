@@ -104,6 +104,7 @@ func startDefaultListener(storage *storage.Storage, signal *signal.Signal) {
 			fmt.Println("Invalid userID")
 			continue
 		}
+		fmt.Println("Listening msgs for user ID = ", userID)
 		//get existing messages sent before subscription
 		messageBacklog, err := storage.PopAll(userID)
 		if err == nil {
@@ -143,7 +144,7 @@ func stopHandler(ch chan struct{}) {
 }
 
 func main() {
-	storage, err := storage.NewStorage(50, 3, dbConnStr)
+	storage, err := storage.NewStorage(50, 1, dbConnStr)
 	if err != nil {
 		fmt.Println(err)
 		return
