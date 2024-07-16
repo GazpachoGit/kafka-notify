@@ -71,6 +71,9 @@ func (r *Redis) Close() {
 
 func InitHotCache(cache *Redis, db *PgDB) error {
 	dbSize, err := cache.redisClient.Do("DBSIZE").Int64()
+	if err != nil {
+		return fmt.Errorf("Not able to get hot cache: %w", err)
+	}
 	if dbSize > 0 {
 		//cache already hot
 		return nil
