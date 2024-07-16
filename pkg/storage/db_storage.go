@@ -66,13 +66,26 @@ func (p *PgDB) GetMessage(id int) (*models.Notification, error) {
 	return note, nil
 }
 
-// func main() {
-// 	//TODO: move configs to common file
-// 	connStr := "postgres://puser:ppassword@localhost:6432/notifyDB?sslmode=disable"
-// 	_, err := InitDB(context.Background(), connStr)
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		return
-// 	}
-// 	fmt.Println("success")
-// }
+func (p *PgDB) GetAllMessages() ([]models.DBNotification, error) {
+	rows, err := p.dbConn.Query(p.ctx, "SELECT * FROM notifications LIMIT 1000")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// An album slice to hold data from returned rows.
+	msgs := make([]models.DBNotification, 0, 10)
+
+	// Loop through rows, using Scan to assign column data to struct fields.
+	for rows.Next() {
+		var msg models.DBNotification
+		if err := rows.Scan(&msg.ID, &msg.To, &msg.Message); err != nil {
+			return msgs, err
+		}
+		msgs = append(msgs, msg)
+	}
+	if err = rows.Err(); err != nil {
+		return msgs, err
+	}
+	return msgs, nil
+}

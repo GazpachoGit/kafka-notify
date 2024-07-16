@@ -22,9 +22,9 @@ func (w bodyLogWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-func CacheMiddlewareHandler(cache *storage.Redis) gin.HandlerFunc {
+func CacheMiddlewareHandler(cache *storage.Redis, URLParam string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		messageIDStr := ctx.Param("userID")
+		messageIDStr := ctx.Param(URLParam)
 		if messageIDStr == "" {
 			ctx.JSON(http.StatusNotFound, gin.H{"message": "object not found in the database"})
 			ctx.Abort()

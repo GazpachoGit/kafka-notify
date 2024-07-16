@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"kafka-notify/pkg/models"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -66,4 +67,38 @@ func (r *Redis) GetCache(key string) (*models.Notification, error) {
 
 func (r *Redis) Close() {
 	r.redisClient.Close()
+}
+
+func InitHotCache(cache *Redis, db *PgDB) error {
+	dbSize, err := cache.redisClient.Do("DBSIZE").Int64()
+	if dbSize > 0 {
+		//cache already hot
+		return nil
+	}
+	msgs, err := db.GetAllMessages()
+	if err != nil {
+		return err
+	}
+	arr := make([]interface{}, 0, 10)
+	arr = append(arr, "MSET")
+	for _, v := range msgs {
+		value, err := json.Marshal(v.MapToNotification())
+		if err != nil {
+			return err
+		}
+		key := strconv.Itoa(v.ID)
+		arr = append(arr, key, value)
+		if len(arr) == cap(arr) {
+			if err = cache.redisClient.Do(arr...).Err(); err != nil {
+				return err
+			}
+			arr = arr[:1]
+		}
+	}
+	if len(arr) > 1 {
+		if err = cache.redisClient.Do(arr...).Err(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -20,7 +20,7 @@ const (
 
 func handleGetNotification(dbStorage *storage.PgDB) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		messageIDStr := ctx.Param("userID")
+		messageIDStr := ctx.Param("msgID")
 		messageID, err := strconv.Atoi(messageIDStr)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"message": "incorrect notification id format"})
@@ -71,10 +71,12 @@ func main() {
 	}
 	defer dbStorage.Close()
 
+	storage.InitHotCache(cache, dbStorage)
+
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	router.GET("/notifications/:userID", middleware.CacheMiddlewareHandler(cache), handleGetNotification(dbStorage))
+	router.GET("/notifications/:msgID", middleware.CacheMiddlewareHandler(cache, "msgID"), handleGetNotification(dbStorage))
 	router.POST("/notifications", handleSetNotification(cache, dbStorage))
 
 	fmt.Println("Cached service started")
